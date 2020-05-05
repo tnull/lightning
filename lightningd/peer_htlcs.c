@@ -944,7 +944,32 @@ static bool htlc_accepted_hook_deserialize(struct htlc_accepted_hook_payload *re
 			failmsg = convert_failcode(NULL, ld, failcode);
 		} else
 			failmsg = towire_temporary_node_failure(NULL);
-		local_fail_in_htlc(hin, take(failmsg));
+
+        switch (fromwire_peektype(failmsg)) {
+            case WIRE_TEMPORARY_CHANNEL_FAILURE:
+                failmsg = towire_temporary_channel_failure(tmpctx, NULL);
+                local_fail_in_htlc_needs_update(hin, take(failmsg), hin->key.channel->scid);
+                break;
+            case WIRE_AMOUNT_BELOW_MINIMUM:
+                failmsg = towire_amount_below_minimum(tmpctx, hin->msat, NULL);
+                local_fail_in_htlc_needs_update(hin, take(failmsg), hin->key.channel->scid);
+                break;
+            case WIRE_FEE_INSUFFICIENT:
+                failmsg = towire_fee_insufficient(tmpctx, hin->msat, NULL);
+                local_fail_in_htlc_needs_update(hin, take(failmsg), hin->key.channel->scid);
+                break;
+            case WIRE_INCORRECT_CLTV_EXPIRY:
+                failmsg = towire_incorrect_cltv_expiry(tmpctx, hin->cltv_expiry, NULL);
+                local_fail_in_htlc_needs_update(hin, take(failmsg), hin->key.channel->scid);
+                break;
+            case WIRE_EXPIRY_TOO_SOON:
+                failmsg = towire_expiry_too_soon(tmpctx, NULL);
+                local_fail_in_htlc_needs_update(hin, take(failmsg), hin->key.channel->scid);
+                break;
+            default:
+                local_fail_in_htlc(hin, take(failmsg));
+        }
+
 		return false;
 	} else if (json_tok_streq(buffer, resulttok, "resolve")) {
 		paykeytok = json_get_member(buffer, toks, "payment_key");
